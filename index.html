@@ -153,6 +153,52 @@
                 };
             }
             
+            async updateCycle(cycleId, cycleData) {
+                const supabaseData = {
+                    start_date: cycleData.startDate,
+                    end_date: cycleData.endDate,
+                    flow: cycleData.flow,
+                    symptoms: cycleData.symptoms,
+                    pre_symptoms: cycleData.preSymptoms,
+                    notes: cycleData.notes,
+                    length: cycleData.length
+                };
+                
+                const response = await fetch(`${this.baseUrl}?id=eq.${cycleId}`, {
+                    method: 'PATCH',
+                    headers: this.headers,
+                    body: JSON.stringify(supabaseData)
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Erreur: ${response.status}`);
+                }
+                
+                return {
+                    id: cycleId,
+                    startDate: cycleData.startDate,
+                    endDate: cycleData.endDate,
+                    flow: cycleData.flow,
+                    symptoms: cycleData.symptoms,
+                    preSymptoms: cycleData.preSymptoms,
+                    notes: cycleData.notes,
+                    length: cycleData.length
+                };
+            }
+            
+            async deleteCycle(cycleId) {
+                const response = await fetch(`${this.baseUrl}?id=eq.${cycleId}`, {
+                    method: 'DELETE',
+                    headers: this.headers
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Erreur: ${response.status}`);
+                }
+                
+                return true;
+            }
+            
             calculateLength(startDate, endDate) {
                 const start = new Date(startDate);
                 const end = new Date(endDate);
@@ -305,10 +351,23 @@
                     const cycleLength = calculateCycleLength(newCycle.startDate, newCycle.endDate);
                     const cycleToAdd = { ...newCycle, length: cycleLength };
                     
-                    const createdCycle = await supabaseService.createCycle(cycleToAdd);
-                    const updatedCycles = [...cycles, createdCycle].sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
-                    setCycles(updatedCycles);
-                    localStorage.setItem('menstrualCycles', JSON.stringify(updatedCycles));
+                    if (editingCycle) {
+                        // Mode modification
+                        const updatedCycle = await supabaseService.updateCycle(editingCycle.id, cycleToAdd);
+                        const updatedCycles = cycles.map(cycle => 
+                            cycle.id === editingCycle.id ? updatedCycle : cycle
+                        ).sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+                        setCycles(updatedCycles);
+                        localStorage.setItem('menstrualCycles', JSON.stringify(updatedCycles));
+                        setSuccess('Cycle modifié avec succès !');
+                    } else {
+                        // Mode ajout
+                        const createdCycle = await supabaseService.createCycle(cycleToAdd);
+                        const updatedCycles = [...cycles, createdCycle].sort((a, b) => new Date(a.startDate) - new Date(b.startDate));
+                        setCycles(updatedCycles);
+                        localStorage.setItem('menstrualCycles', JSON.stringify(updatedCycles));
+                        setSuccess('Cycle ajouté avec succès !');
+                    }
                     
                     setNewCycle({
                         startDate: '',
@@ -320,12 +379,47 @@
                     });
                     
                     setIsAddingCycle(false);
-                    setSuccess('Cycle ajouté avec succès !');
+                    setEditingCycle(null);
                     setTimeout(() => setSuccess(null), 3000);
                     
                 } catch (err) {
                     console.error('Erreur:', err);
-                    setError(`Erreur lors de l'ajout: ${err.message}`);
+                    setError(`Erreur lors de ${editingCycle ? 'la modification' : 'l\'ajout'}: ${err.message}`);
+                } finally {
+                    setLoading(false);
+                }
+            };
+            
+            const editCycle = (cycle) => {
+                setEditingCycle(cycle);
+                setNewCycle({
+                    startDate: cycle.startDate,
+                    endDate: cycle.endDate,
+                    flow: cycle.flow,
+                    symptoms: cycle.symptoms || [],
+                    preSymptoms: cycle.preSymptoms || [],
+                    notes: cycle.notes || ''
+                });
+                setIsAddingCycle(true);
+            };
+            
+            const deleteCycle = async (cycleId) => {
+                if (!window.confirm('Êtes-vous sûre de vouloir supprimer ce cycle ?')) {
+                    return;
+                }
+                
+                setLoading(true);
+                
+                try {
+                    await supabaseService.deleteCycle(cycleId);
+                    const updatedCycles = cycles.filter(cycle => cycle.id !== cycleId);
+                    setCycles(updatedCycles);
+                    localStorage.setItem('menstrualCycles', JSON.stringify(updatedCycles));
+                    setSuccess('Cycle supprimé avec succès !');
+                    setTimeout(() => setSuccess(null), 3000);
+                } catch (err) {
+                    console.error('Erreur:', err);
+                    setError(`Erreur lors de la suppression: ${err.message}`);
                 } finally {
                     setLoading(false);
                 }
@@ -635,7 +729,24 @@
                                                     </div>
                                                 )}
                                             </div>
-                                        </div>
+                                            <div className="flex gap-2">
+                                                <button
+                                                    onClick={() => editCycle(cycle)}
+                                                    disabled={loading}
+                                                    className="text-blue-600 hover:text-blue-800 disabled:text-blue-300 p-2 rounded hover:bg-blue-50 transition-colors"
+                                                    title="Modifier ce cycle"
+                                                >
+                                                    <Edit3 />
+                                                </button>
+                                                <button
+                                                    onClick={() => deleteCycle(cycle.id)}
+                                                    disabled={loading}
+                                                    className="text-red-600 hover:text-red-800 disabled:text-red-300 p-2 rounded hover:bg-red-50 transition-colors"
+                                                    title="Supprimer ce cycle"
+                                                >
+                                                    <Trash2 />
+                                                </button>
+                                            </div>
                                     </div>
                                 ))}
                             </div>
@@ -762,11 +873,12 @@
                                             disabled={loading || !newCycle.startDate || !newCycle.endDate}
                                             className="flex-1 bg-pink-600 hover:bg-pink-700 disabled:bg-pink-300 text-white py-3 px-4 rounded-lg transition-colors font-medium text-base order-2 sm:order-1"
                                         >
-                                            {loading ? 'Traitement...' : 'Ajouter'}
+                                            {loading ? 'Traitement...' : (editingCycle ? 'Modifier' : 'Ajouter')}
                                         </button>
                                         <button
                                             onClick={() => {
                                                 setIsAddingCycle(false);
+                                                setEditingCycle(null);
                                                 setError(null);
                                                 setNewCycle({
                                                     startDate: '',
