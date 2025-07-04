@@ -70,6 +70,21 @@
             </svg>
         );
         
+        const TrendingUp = () => (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+                <polyline points="17 6 23 6 23 12"></polyline>
+            </svg>
+        );
+        
+        const AlertCircle = () => (
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+            </svg>
+        );
+        
         // Service Supabase
         class SupabaseService {
             constructor() {
@@ -207,6 +222,68 @@
                 return Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
             };
             
+            const calculateDaysBetweenCycles = (prevEndDate, nextStartDate) => {
+                const prevEnd = new Date(prevEndDate);
+                const nextStart = new Date(nextStartDate);
+                return Math.ceil((nextStart - prevEnd) / (1000 * 60 * 60 * 24)) - 1;
+            };
+            
+            const predictNextCycle = useMemo(() => {
+                if (cycles.length < 2) return null;
+                
+                // Calculer les intervalles entre cycles
+                const intervals = [];
+                for (let i = 1; i < cycles.length; i++) {
+                    const prevCycle = cycles[i - 1];
+                    const currentCycle = cycles[i];
+                    const daysBetween = calculateDaysBetweenCycles(prevCycle.endDate, currentCycle.startDate);
+                    intervals.push(daysBetween);
+                }
+                
+                // Calculer la durée moyenne des cycles
+                const cycleLengths = cycles.map(c => c.length);
+                const avgCycleLength = cycleLengths.reduce((a, b) => a + b, 0) / cycleLengths.length;
+                
+                // Calculer l'intervalle moyen
+                const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+                
+                // Prédire le prochain cycle
+                const lastCycle = cycles[cycles.length - 1];
+                const lastEndDate = new Date(lastCycle.endDate);
+                
+                // Date de début prévue = dernière date de fin + intervalle moyen
+                const predictedStartDate = new Date(lastEndDate);
+                predictedStartDate.setDate(predictedStartDate.getDate() + Math.round(avgInterval) + 1);
+                
+                // Date de fin prévue = date de début + durée moyenne
+                const predictedEndDate = new Date(predictedStartDate);
+                predictedEndDate.setDate(predictedEndDate.getDate() + Math.round(avgCycleLength) - 1);
+                
+                // Calculer les jours restants
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                predictedStartDate.setHours(0, 0, 0, 0);
+                
+                const daysUntilNext = Math.ceil((predictedStartDate - today) / (1000 * 60 * 60 * 24));
+                
+                // Calculer la confiance de la prédiction
+                const intervalVariation = Math.max(...intervals) - Math.min(...intervals);
+                const lengthVariation = Math.max(...cycleLengths) - Math.min(...cycleLengths);
+                const confidence = intervals.length >= 3 && intervalVariation <= 7 && lengthVariation <= 3 ? 'élevée' : 
+                                 intervals.length >= 2 && intervalVariation <= 10 ? 'moyenne' : 'faible';
+                
+                return {
+                    startDate: predictedStartDate,
+                    endDate: predictedEndDate,
+                    daysUntilNext,
+                    avgCycleLength: Math.round(avgCycleLength),
+                    avgInterval: Math.round(avgInterval),
+                    confidence,
+                    intervalVariation,
+                    lengthVariation
+                };
+            }, [cycles]);
+            
             const addCycle = async () => {
                 if (!newCycle.startDate || !newCycle.endDate) {
                     setError('Veuillez remplir les dates de début et de fin');
@@ -334,6 +411,146 @@
                         {success && (
                             <div className="bg-green-100 border-l-4 border-green-400 p-4 mb-6">
                                 <div className="text-green-700">{success}</div>
+                            </div>
+                        )}
+                        
+                        {/* Section Prévisions */}
+                        {predictNextCycle && (
+                            <div className="bg-white rounded-lg shadow-lg p-6 mb-6">
+                                <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                                    <TrendingUp />
+                                    Prévisions du prochain cycle
+                                </h2>
+                                
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {/* Prédiction principale */}
+                                    <div className="bg-gradient-to-r from-purple-100 to-pink-100 p-6 rounded-lg">
+                                        <h3 className="font-semibold text-lg mb-3 text-purple-800">Prochain cycle prévu</h3>
+                                        
+                                        {predictNextCycle.daysUntilNext > 0 ? (
+                                            <div className="space-y-2">
+                                                <div className="text-3xl font-bold text-purple-900">
+                                                    Dans {predictNextCycle.daysUntilNext} jour{predictNextCycle.daysUntilNext > 1 ? 's' : ''}
+                                                </div>
+                                                <div className="text-purple-700">
+                                                    <div><strong>Début prévu :</strong> {predictNextCycle.startDate.toLocaleDateString('fr-FR', { 
+                                                        weekday: 'long', 
+                                                        year: 'numeric', 
+                                                        month: 'long', 
+                                                        day: 'numeric' 
+                                                    })}</div>
+                                                    <div><strong>Fin prévue :</strong> {predictNextCycle.endDate.toLocaleDateString('fr-FR', { 
+                                                        weekday: 'long', 
+                                                        year: 'numeric', 
+                                                        month: 'long', 
+                                                        day: 'numeric' 
+                                                    })}</div>
+                                                    <div><strong>Durée prévue :</strong> {predictNextCycle.avgCycleLength} jours</div>
+                                                </div>
+                                            </div>
+                                        ) : predictNextCycle.daysUntilNext === 0 ? (
+                                            <div className="text-2xl font-bold text-pink-900">
+                                                Votre cycle devrait commencer aujourd'hui !
+                                            </div>
+                                        ) : (
+                                            <div className="space-y-2">
+                                                <div className="text-2xl font-bold text-orange-900">
+                                                    En retard de {Math.abs(predictNextCycle.daysUntilNext)} jour{Math.abs(predictNextCycle.daysUntilNext) > 1 ? 's' : ''}
+                                                </div>
+                                                <div className="text-orange-700">
+                                                    <div><strong>Était prévu le :</strong> {predictNextCycle.startDate.toLocaleDateString('fr-FR')}</div>
+                                                    <div className="text-sm mt-2">Les cycles peuvent varier naturellement</div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                    
+                                    {/* Fiabilité et conseils */}
+                                    <div className="bg-gradient-to-r from-blue-100 to-indigo-100 p-6 rounded-lg">
+                                        <h3 className="font-semibold text-lg mb-3 text-blue-800">Fiabilité de la prédiction</h3>
+                                        
+                                        <div className="space-y-3">
+                                            <div className="flex items-center gap-2">
+                                                <div className={`w-3 h-3 rounded-full ${
+                                                    predictNextCycle.confidence === 'élevée' ? 'bg-green-500' :
+                                                    predictNextCycle.confidence === 'moyenne' ? 'bg-yellow-500' : 'bg-red-500'
+                                                }`}></div>
+                                                <span className="font-medium">Confiance {predictNextCycle.confidence}</span>
+                                            </div>
+                                            
+                                            <div className="text-sm text-blue-700 space-y-1">
+                                                <div>• Basé sur {cycles.length} cycles enregistrés</div>
+                                                <div>• Variation durée : {predictNextCycle.lengthVariation} jours</div>
+                                                <div>• Variation intervalle : {predictNextCycle.intervalVariation} jours</div>
+                                            </div>
+                                            
+                                            {predictNextCycle.confidence === 'faible' && (
+                                                <div className="bg-yellow-100 border-l-4 border-yellow-400 p-3 mt-3">
+                                                    <div className="flex items-center">
+                                                        <AlertCircle />
+                                                        <div className="ml-2 text-yellow-800 text-sm">
+                                                            <div className="font-medium">Prédiction approximative</div>
+                                                            <div>Enregistrez plus de cycles pour améliorer la précision</div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            
+                                            {predictNextCycle.confidence === 'élevée' && (
+                                                <div className="bg-green-100 border-l-4 border-green-400 p-3 mt-3">
+                                                    <div className="text-green-800 text-sm">
+                                                        <div className="font-medium">Prédiction fiable</div>
+                                                        <div>Vos cycles sont réguliers</div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                {/* Phase du cycle actuel */}
+                                <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                                    <h4 className="font-medium mb-2">Phase actuelle estimée</h4>
+                                    {(() => {
+                                        const today = new Date();
+                                        const lastCycle = cycles[cycles.length - 1];
+                                        const daysSinceLastCycle = Math.ceil((today - new Date(lastCycle.endDate)) / (1000 * 60 * 60 * 24));
+                                        const totalCycleLength = predictNextCycle.avgCycleLength + predictNextCycle.avgInterval;
+                                        const cycleDay = daysSinceLastCycle;
+                                        
+                                        let phase, description, color;
+                                        
+                                        if (cycleDay <= 5) {
+                                            phase = "Post-menstruelle";
+                                            description = "Phase de récupération";
+                                            color = "text-blue-600";
+                                        } else if (cycleDay <= Math.round(totalCycleLength * 0.4)) {
+                                            phase = "Folliculaire";
+                                            description = "Phase d'énergie croissante";
+                                            color = "text-green-600";
+                                        } else if (cycleDay <= Math.round(totalCycleLength * 0.6)) {
+                                            phase = "Ovulation";
+                                            description = "Phase fertile";
+                                            color = "text-yellow-600";
+                                        } else if (cycleDay <= Math.round(totalCycleLength * 0.9)) {
+                                            phase = "Lutéale";
+                                            description = "Phase prémenstruelle";
+                                            color = "text-orange-600";
+                                        } else {
+                                            phase = "Prémenstruelle";
+                                            description = "Cycle attendu bientôt";
+                                            color = "text-red-600";
+                                        }
+                                        
+                                        return (
+                                            <div className="flex items-center gap-4">
+                                                <div className={`font-semibold ${color}`}>{phase}</div>
+                                                <div className="text-gray-600">{description}</div>
+                                                <div className="text-sm text-gray-500">Jour {cycleDay} du cycle</div>
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
                             </div>
                         )}
                         
