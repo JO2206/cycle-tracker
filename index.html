@@ -472,6 +472,60 @@
                                         </div>
                                         
                                         <div>
+                                            <label className="block text-sm font-medium mb-2">Symptômes avant le cycle (SPM)</label>
+                                            <div className="border rounded-lg p-3 max-h-40 overflow-y-auto bg-gray-50">
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                    {preSymptoms.map(symptom => (
+                                                        <label key={symptom} className="flex items-center text-sm py-1">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={newCycle.preSymptoms.includes(symptom)}
+                                                                onChange={(e) => {
+                                                                    const isChecked = e.target.checked;
+                                                                    setNewCycle(prev => ({
+                                                                        ...prev,
+                                                                        preSymptoms: isChecked 
+                                                                            ? [...prev.preSymptoms, symptom]
+                                                                            : prev.preSymptoms.filter(s => s !== symptom)
+                                                                    }));
+                                                                }}
+                                                                className="mr-2"
+                                                            />
+                                                            <span>{symptom}</span>
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div>
+                                            <label className="block text-sm font-medium mb-2">Symptômes pendant le cycle</label>
+                                            <div className="border rounded-lg p-3 max-h-40 overflow-y-auto bg-gray-50">
+                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                                    {symptoms.map(symptom => (
+                                                        <label key={symptom} className="flex items-center text-sm py-1">
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={newCycle.symptoms.includes(symptom)}
+                                                                onChange={(e) => {
+                                                                    const isChecked = e.target.checked;
+                                                                    setNewCycle(prev => ({
+                                                                        ...prev,
+                                                                        symptoms: isChecked 
+                                                                            ? [...prev.symptoms, symptom]
+                                                                            : prev.symptoms.filter(s => s !== symptom)
+                                                                    }));
+                                                                }}
+                                                                className="mr-2"
+                                                            />
+                                                            <span>{symptom}</span>
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div>
                                             <label className="block text-sm font-medium mb-1">Notes</label>
                                             <textarea
                                                 value={newCycle.notes}
